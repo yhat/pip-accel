@@ -202,7 +202,7 @@ class CacheManager(object):
             # every run (not good for performance ;-).
             url = None
         tag = sha1(requirement.version + url) if url else requirement.version
-        return 'v%i/%s:%s:%s.tar.gz' % (self.config.cache_format_revision,
+        return 'v%i/%s-%s-%s.tar.gz' % (self.config.cache_format_revision,
                                         requirement.name, tag, get_python_version())
 
 
