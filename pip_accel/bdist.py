@@ -158,7 +158,7 @@ class BinaryDistributionManager(object):
         # pip install into this as our target.
         temporary_dir = tempfile.mkdtemp()
         distutils_inst = install(Distribution())
-        distutils_inst.prefix = '/usr' # This will be changed if we're in a virtualenv.
+        distutils_inst.prefix = '' # This will be changed if we're in a virtualenv.
         distutils_inst.finalize_options()
         pip_target = os.path.normpath(temporary_dir + distutils_inst.install_lib)
         # Compose the command line needed to build the binary distribution.
