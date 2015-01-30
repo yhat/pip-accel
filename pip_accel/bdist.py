@@ -153,13 +153,12 @@ class BinaryDistributionManager(object):
             logger.debug("Cleaning up previously generated distributions in %s ..", dist_directory)
             shutil.rmtree(dist_directory)
         makedirs(dist_directory)
-
         # Create a temporary directory for pip installing into, and set up the
         # install_lib directory structure inside it. We do this so that we can
         # pip install into this as our target.
         temporary_dir = tempfile.mkdtemp()
         distutils_inst = install(Distribution())
-        distutils_inst.prefix = '/usr/local' # This will be changed if we're in a virutalenv.
+        distutils_inst.prefix = '' # This will be changed if we're in a virtualenv.
         distutils_inst.finalize_options()
         pip_target = os.path.normpath(temporary_dir + distutils_inst.install_lib)
         # Compose the command line needed to build the binary distribution.
@@ -169,6 +168,7 @@ class BinaryDistributionManager(object):
         # Redirect all output of the build to a temporary file.
         fd, temporary_file = tempfile.mkstemp()
         command_line = '%s > "%s" 2>&1' % (command_line, temporary_file)
+
         try:
             # Start the build.
             build = subprocess.Popen(['sh', '-c', command_line], cwd=requirement.source_directory)
@@ -180,9 +180,11 @@ class BinaryDistributionManager(object):
                 time.sleep(0.2)
             spinner.clear()
 
+
             # Tar up the contents of temporary_dir into the correct file name and put it in the dist dir.
-            tarball_path = os.path.join(dist_directory, requirement.name)
-            archive_util.make_tarball(tarball_path, temporary_dir)
+            tarball_path = os.path.join(temporary_dir, requirement.name)
+            path = archive_util.make_archive(tarball_path, 'gztar', root_dir=temporary_dir)
+            shutil.copy(path, dist_directory)
 
             # Make sure the build succeeded and produced a binary distribution archive.
             try:
@@ -259,7 +261,7 @@ class BinaryDistributionManager(object):
             # kind of awkward: I would like to use os.path.relpath() on them but
             # that won't give the correct result without some preprocessing...
             original_pathname = member.name
-            absolute_pathname = re.sub(r'^\./', '/', original_pathname)
+            absolute_pathname = re.sub(r'^\./', '', original_pathname)
             if member.isdev():
                 logger.warn("Ignoring device file: %s.", absolute_pathname)
             elif not member.isdir():
