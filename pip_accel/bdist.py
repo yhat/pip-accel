@@ -162,8 +162,7 @@ class BinaryDistributionManager(object):
         distutils_inst.finalize_options()
         pip_target = os.path.normpath(temporary_dir + distutils_inst.install_lib)
         # Compose the command line needed to build the binary distribution.
-        pip = os.path.join(sys.prefix, 'bin', 'pip')
-        command_line = ' '.join(pipes.quote(t) for t in [pip, 'install', '.', '--target', pip_target])
+        command_line = ' '.join(pipes.quote(t) for t in ['pip', 'install', '.', '--target', pip_target])
         logger.debug("Executing external command: %s", command_line)
         # Redirect all output of the build to a temporary file.
         fd, temporary_file = tempfile.mkstemp()
