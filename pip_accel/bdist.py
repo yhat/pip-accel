@@ -260,7 +260,7 @@ class BinaryDistributionManager(object):
             # kind of awkward: I would like to use os.path.relpath() on them but
             # that won't give the correct result without some preprocessing...
             original_pathname = member.name
-            modified_pathname = re.sub(r'^\./', '/', original_pathname)
+            modified_pathname = re.sub(r'^\./', '', original_pathname)
             if member.isdev():
                 logger.warn("Ignoring device file: %s.", modified_pathname)
             elif not member.isdir():
