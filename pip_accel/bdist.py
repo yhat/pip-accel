@@ -158,7 +158,7 @@ class BinaryDistributionManager(object):
         # pip install into this as our target.
         temporary_dir = tempfile.mkdtemp()
         distutils_inst = install(Distribution())
-        distutils_inst.prefix = '' # This will be changed if we're in a virtualenv.
+        distutils_inst.prefix = '/usr' # This will be changed if we're in a virtualenv.
         distutils_inst.finalize_options()
         pip_target = os.path.normpath(temporary_dir + distutils_inst.install_lib)
         # Compose the command line needed to build the binary distribution.
@@ -260,11 +260,10 @@ class BinaryDistributionManager(object):
             # kind of awkward: I would like to use os.path.relpath() on them but
             # that won't give the correct result without some preprocessing...
             original_pathname = member.name
-            absolute_pathname = re.sub(r'^\./', '', original_pathname)
+            modified_pathname = re.sub(r'^\./', '/', original_pathname)
             if member.isdev():
-                logger.warn("Ignoring device file: %s.", absolute_pathname)
+                logger.warn("Ignoring device file: %s.", modified_pathname)
             elif not member.isdir():
-                modified_pathname = os.path.relpath(absolute_pathname, self.config.install_prefix)
                 if os.path.isabs(modified_pathname):
                     logger.warn("Failed to transform pathname in binary distribution to relative path! (original: %r, modified: %r)",
                                 original_pathname, modified_pathname)
