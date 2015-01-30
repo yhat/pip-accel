@@ -26,6 +26,11 @@ import tarfile
 import tempfile
 import time
 
+# Things we need from distutils
+from distutils import archive_util
+from distutils.command.install import install
+from distutils.dist import Distribution
+
 # External dependencies.
 from humanfriendly import Spinner, Timer, concatenate
 
@@ -113,36 +118,14 @@ class BinaryDistributionManager(object):
 
         .. code-block:: sh
 
-           $ python setup.py bdist_dumb --format=tar
+           $ pip install . --root <temp directory>
 
-        This command can fail for two main reasons:
-
-        1. The package is missing binary dependencies.
-        2. The ``setup.py`` script doesn't (properly) implement ``bdist_dumb``
-           binary distribution format support.
-
-        The first case is dealt with in :py:func:`get_binary_dist()`. To deal
-        with the second case this method falls back to the following command:
-
-        .. code-block:: sh
-
-           $ python setup.py bdist
-
-        This fall back is almost never needed, but there are Python packages
-        out there which require this fall back (this method was added because
-        the installation of ``Paver==1.2.3`` failed, see `issue 37`_ for
-        details about that).
-
-        .. _issue 37: https://github.com/paylogic/pip-accel/issues/37
+        This command can fail if the package is missing binary dependencie.
+        This is dealt with in :py:func:`get_binary_dist()`.
         """
-        try:
-            return self.build_binary_dist_helper(requirement, ['bdist_dumb', '--format=tar'])
-        except (BuildFailed, NoBuildOutput):
-            logger.warning("Build of %s (%s) failed, falling back to alternative method ..",
-                           requirement.name, requirement.version)
-            return self.build_binary_dist_helper(requirement, ['bdist'])
+        return self.build_binary_dist_helper(requirement)
 
-    def build_binary_dist_helper(self, requirement, setup_command):
+    def build_binary_dist_helper(self, requirement):
         """
         Convert a single, unpacked source distribution to a binary
         distribution. Raises an exception if it fails to create the binary
@@ -150,8 +133,6 @@ class BinaryDistributionManager(object):
         system libraries).
 
         :param requirement: A :py:class:`.Requirement` object.
-        :param setup_command: A list of strings with the arguments to
-                              ``setup.py``.
         :returns: The pathname of the resulting binary distribution (a string).
         :raises: :py:exc:`.BuildFailed` when the build reports an error.
         :raises: :py:exc:`.NoBuildOutput` when the build does not produce the
@@ -171,8 +152,19 @@ class BinaryDistributionManager(object):
         if os.path.isdir(dist_directory):
             logger.debug("Cleaning up previously generated distributions in %s ..", dist_directory)
             shutil.rmtree(dist_directory)
+        makedirs(dist_directory)
+
+        # Create a temporary directory for pip installing into, and set up the
+        # install_lib directory structure inside it. We do this so that we can
+        # pip install into this as our target.
+        temporary_dir = tempfile.mkdtemp()
+        distutils_inst = install(Distribution())
+        distutils_inst.prefix = '/usr/local' # This will be changed if we're in a virutalenv.
+        distutils_inst.finalize_options()
+        pip_target = os.path.normpath(temporary_dir + distutils_inst.install_lib)
         # Compose the command line needed to build the binary distribution.
-        command_line = ' '.join(pipes.quote(t) for t in [self.config.python_executable, 'setup.py'] + setup_command)
+        pip = os.path.join(sys.prefix, 'bin', 'pip')
+        command_line = ' '.join(pipes.quote(t) for t in [pip, 'install', '.', '--target', pip_target])
         logger.debug("Executing external command: %s", command_line)
         # Redirect all output of the build to a temporary file.
         fd, temporary_file = tempfile.mkstemp()
@@ -187,6 +179,11 @@ class BinaryDistributionManager(object):
                 # Don't tax the CPU too much.
                 time.sleep(0.2)
             spinner.clear()
+
+            # Tar up the contents of temporary_dir into the correct file name and put it in the dist dir.
+            tarball_path = os.path.join(dist_directory, requirement.name)
+            archive_util.make_tarball(tarball_path, temporary_dir)
+
             # Make sure the build succeeded and produced a binary distribution archive.
             try:
                 # If the build reported an error we'll try to provide the user with
@@ -225,6 +222,7 @@ class BinaryDistributionManager(object):
             return os.path.join(dist_directory, filenames[0])
         finally:
             os.unlink(temporary_file)
+            shutil.rmtree(temporary_dir)
 
     def transform_binary_dist(self, archive_path):
         """
@@ -342,6 +340,7 @@ class BinaryDistributionManager(object):
             if not os.path.isdir(directory):
                 logger.debug("Creating directory: %s ..", directory)
                 makedirs(directory)
+
             logger.debug("Creating file: %s ..", pathname)
             with open(pathname, 'wb') as to_handle:
                 contents = from_handle.read()
