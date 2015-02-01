@@ -179,6 +179,53 @@ class BinaryDistributionManager(object):
                 time.sleep(0.2)
             spinner.clear()
 
+            # At this point, we may have a number of dependencies in the directory we want
+            # to tar up that should not be part of the package distribution. For instance,
+            # s3 will also wrap up the concurrent, futures, and requests packages. We fix
+            # this by reading {name}-{version}-{py-version}.egg-info/installed-files.txt
+            # and removing any files or directories that are not in it.
+
+            # 1. Find the appropriate .egg-info/ directory.
+            egg_info_dir = None
+            egg_info_start = '-'.join([requirement.name, requirement.version])
+            for egg_info_root, dirs, _ in os.walk(temporary_dir):
+                for d in dirs:
+                    if d.startswith(egg_info_start) and d.endswith('.egg-info'):
+                        egg_info_dir = d
+                        break
+                if egg_info_dir is not None:
+                    break
+
+            # 2. If we have a .egg-info/, try to read the installed-files.txt contents.
+            inst_files = set()
+            if egg_info_dir is not None:
+                egg_info_path = os.path.join(egg_info_root, egg_info_dir)
+                inst_files_path = os.path.join(egg_info_path, 'installed-files.txt')
+                try:
+                    with open(inst_files_path) as f:
+                        for line in f:
+                            abs_path = os.path.abspath(os.path.join(egg_info_path, line.strip()))
+                            inst_files.add(abs_path)
+                            inst_files.add(os.path.dirname(abs_path))
+                except IOError, ioe:
+                    loger.warn('Unable to open %s: %s' % (inst_files_path, ioe))
+
+            # 3. If we were able to get a set of files and directories that belong in the
+            #    distribution, then we can delete everything else before archiving it.
+            if inst_files:
+                dirs, files = next(os.walk(egg_info_root))[1:]
+                for d in dirs:
+                    d = os.path.abspath(os.path.join(egg_info_root, d))
+                    if d not in inst_files:
+                        logger.info('Removing %s (not part of the package)' % d)
+                        shutil.rmtree(d)
+
+                for f in files:
+                    f = os.path.abspath(os.path.join(egg_info_root, f))
+                    if f not in inst_files:
+                        logger.info('Removing %s (not part of the package)' % f)
+                        os.unlink(f)
+
 
             # Tar up the contents of temporary_dir into the correct file name and put it in the dist dir.
             tarball_path = os.path.join(temporary_dir, requirement.name)
