@@ -357,13 +357,12 @@ class PipAccelerator(object):
         """
         install_timer = Timer()
         logger.info("Installing from binary distributions ..")
-        pip = os.path.join(sys.prefix, 'bin', 'pip')
         for requirement in requirements:
-            if run('{pip} uninstall --yes {package} >/dev/null 2>&1', pip=pip, package=requirement.name):
+            if run('pip uninstall --yes {package}', package=requirement.name):
                 logger.info("Uninstalled previously installed package %s.", requirement.name)
             if requirement.is_editable:
                 logger.debug("Installing %s (%s) in editable form using pip.", requirement.name, requirement.version)
-                if not run('{pip} install --no-deps --editable {url} >/dev/null 2>&1', pip=pip, url=requirement.url):
+                if not run('pip install --no-deps --editable {url}', url=requirement.url):
                     msg = "Failed to install %s (%s) in editable form!"
                     raise Exception(msg % (requirement.name, requirement.version))
             else:
